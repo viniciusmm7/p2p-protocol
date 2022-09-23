@@ -41,7 +41,7 @@ class Server:
         # self.lenLastPacket = 0
 
         # Arquivo de logs aberto e pronto para escrever
-        self.logs = open('logs.txt', 'w')
+        self.logs = open('serverLogs.txt', 'w')
 
 
     # ----- Método para a primeira porta com arduíno
@@ -249,7 +249,7 @@ class Server:
 
         finally:
             self.com1.disable()
-            
+
             copia = 'olhos_fitaocopia.png'
             with open(copia, 'wb') as f:
                 f.write(self.data)
