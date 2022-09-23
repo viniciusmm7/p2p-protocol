@@ -1,44 +1,53 @@
 #####################################################
-# Camada Física da Computação
-#Carareto
-#11/08/2022
-#Aplicação
-####################################################
-
-
-#esta é a camada superior, de aplicação do seu software de comunicação serial UART.
-#para acompanhar a execução e identificar erros, construa prints ao longo do código! 
+#            Camada Física da Computação            #
+#                     Carareto                      #
+#                    23/09/2022                     #
+#                      Server                       #
+#####################################################
 
 
 from enlace import *
 import time, platform, serial.tools.list_ports
 import numpy as np
 
-# voce deverá descomentar e configurar a porta com através da qual ira fazer comunicaçao
 # para saber a sua porta, execute no terminal :
-# python -m serial.tools.list_ports
+# python3 -m serial.tools.list_ports
+
 # para autorizar:
 # sudo chmod a+rw /dev/ttyACM0
 # serialName = "/dev/ttyACM0"           # Ubuntu (variacao de)
 
 class Server:
     def __init__(self):
-        self.HANDSHAKE = b'\x01'
-        self.ACK = b'\x02'
-        self.ERROR = b'\x03'
-        self.FINAL = b'\x04'
+        self.HANDSHAKE_CLIENT = b'\x01'
+        self.HANDSHAKE_SERVER = b'\x02'
+        self.DATA = b'\x03'
+        self.ACK = b'\x04'
+        self.TIMEOUT = b'\x05'
+        self.ERROR = b'\x06'
+        self.FINAL = b'\x07'
         self.EOP = b'\xAA\xBB\xCC\xDD'
+        self.ADDRESS = b'\xf3' # Um endereço qualquer para identificação do servidor
 
         self.os = platform.system().lower()
-        self.serialName = self._findArduino()
+        self.serialName = '/dev/ttyACM0'#self._findArduino()
         self.com1 = enlace(self.serialName)
         self.com1.enable()
+
+        self.offline = True
 
         self.data = b''
         
         self.packetId = 0
         self.lastpacketId = 0
-        # self.lenLastPacket = 0
+        self.lenPacket = 0
+        self.h5 = 0
+
+        self.t1 = 0 # Timer longo para reenvio de ack (2 segundos)
+        self.t3 = 0 # suporte de t1
+
+        self.t2 = 0 # Timer curto para timeout de ack (20 segundos)
+        self.t4 = 0 # suporte de t2
 
         # Arquivo de logs aberto e pronto para escrever
         self.logs = open('serverLogs.txt', 'w')
@@ -46,7 +55,15 @@ class Server:
 
     # ----- Método para a primeira porta com arduíno
     #       se tiver mais de uma (sozinho, por exemplo)
-    def _findArduino(self) -> list:
+    def _findArduino(self) -> str:
+        """
+        private method for finding Arduino port
+        it was not working properly, so it's hard coded
+
+        ATTRIBUTES: void
+
+        RETURNS: result[0]:str list item
+        """
         result = []
         ports = list(serial.tools.list_ports.comports())
         c = 1
@@ -55,14 +72,58 @@ class Server:
             c += 1
         return result[0]
 
+    # ----- Método para calcular os tempos
+    def _calcTime(self, ctime:str) -> list:
+        t = []
+
+        hour = int(ctime.split()[3][:2]) * 3600
+        minute = int(ctime.split()[3][3:5]) * 60
+        second = int(ctime.split()[3][6:])
+
+        t.append(hour)
+        t.append(minute)
+        t.append(second)
+        
+        return t
+
+    # ----- Método para calcular a variação de tempo
+    def _timeVar(first:list, second:list) -> int:
+        var = (second[0] - first[0]) + (second[1] - first[1]) + (second[2] - first[2]) 
+        return var
+
     # ===== MÉTODOS PARA EVITAR REPETIÇÃO DE CÓDIGO =====
-    def waitBufferLen(self):
+    def waitBufferLen(self) -> int:
+        """
+        method used in order to reduce the
+        amount of code repetition
+
+        ATTRIBUTES: void
+
+        RETURNS: rxLen:int
+        """
         rxLen = self.com1.rx.getBufferLen()
         while rxLen == 0:
             rxLen = self.com1.rx.getBufferLen()
+            self.t4 = self._calcTime(time.ctime())
+            if self._timeVar(self.t2, self.t4) > 20:
+                self.offline = True
+                self.send_timeout()
+                pass
+            if self._timeVar(self.t1, self.t3) > 2:
+                self.send_ack(len_packets=self.lenPacket, h5=self.h5)
+                self.t1 = self._calcTime(time.ctime())
+            time.sleep(1)
         return rxLen
 
-    def waitStatus(self):
+    def waitStatus(self) -> int:
+        """
+        method used in order to reduce the
+        amount of code repetition
+
+        ATTRIBUTES: void
+
+        RETURNS: txSize:int
+        """
         txSize = self.com1.tx.getStatus()
         while txSize == 0:
             txSize = self.com1.tx.getStatus()
@@ -73,6 +134,10 @@ class Server:
 
     # ----- Quebrar os dados em payloads de até 114 bytes
     def make_payload_list(self, data) -> list:
+        """
+        method that creates a payload list with
+        items 
+        """
         limit = 114
         payload_list = []
 
@@ -113,13 +178,13 @@ class Server:
 
     # ----- Envia o handshake (só para reduzir a complexidade do entendimento do main)
     def send_handshake(self):
-        hs = self.make_packet(type=self.HANDSHAKE)
+        hs = self.make_packet(type=self.HANDSHAKE_SERVER)
         self.com1.sendData(np.asarray(hs))
 
     # ----- Verifica se o pacote recebido é um handshake
-    # verify_handshake = lambda self, rxBuffer: True if rxBuffer[0] == self.HANDSHAKE else False
+    # verify_handshake = lambda self, rxBuffer: True if rxBuffer[0] == self.HANDSHAKE_CLIENT else False
     def verify_handshake(self, rxBuffer:bytes) -> bool:
-        if rxBuffer[0].to_bytes(1, 'big') == self.HANDSHAKE:
+        if rxBuffer[0].to_bytes(1, 'big') == self.HANDSHAKE_CLIENT and rxBuffer[5] == self.ADDRESS:
             return True
         return False
 
@@ -127,6 +192,7 @@ class Server:
     def send_ack(self, len_packets:int, h5:int):
         ack = self.make_packet(type=self.ACK, len_packets=len_packets.to_bytes(1, 'big'), h5=h5.to_bytes(1, 'big'))
         print('ACK:', ack)
+        self.logs.write(f'ACK: {ack}\n\n')
         self.com1.sendData(np.asarray(ack))
 
     # ----- Verifica se o pacote recebido é um acknowledge
@@ -136,8 +202,13 @@ class Server:
             return True
         return False
 
+    # ----- Envia o timeout
+    def send_timeout(self):
+        timeout = self.make_packet(type=self.TIMEOUT)
+        self.com1.sendData(np.asarray(timeout))
+
     # ----- Envia o erro
-    def send_error(self, h6:int):
+    def send_error(self, h6:int=None):
         error = self.make_packet(type=self.ERROR, h6=h6.to_bytes(1, 'big'))
         self.com1.sendData(np.asarray(error))
 
@@ -156,34 +227,60 @@ class Server:
     def main(self):
         try:
             print('Iniciou o main')
+            self.logs.write('Iniciou o main\n')
             
             print('Abriu a comunicação')
+            self.logs.write('Abriu a comunicação\n')
 
             # ===== HANDSHAKE
-            rxLen = self.waitBufferLen()
+            # enquanto não recebe nada, fica esperando com sleeps de 1 sec
+            rxLen = self.waitBufferLen() # <recebeu msg t1>
             
             rxBuffer, nRx = self.com1.getData(rxLen)
 
-
+            # verifica se a mensagem termina com EOP
             while not rxBuffer.endswith(self.EOP):
                 rxLen = self.waitBufferLen()
                 a = self.com1.getData(rxLen)[0]
                 rxBuffer += a
                 time.sleep(0.05)
             
-            if not self.verify_handshake(rxBuffer):
-                raise Exception('O Handshake não é um Handshake')
+            # ==============================================
+            #                VERIFICAÇÃO AQUI
+            #                       /\
+            #                      /  \
+            #                     /    \
+            #                    /      \
+            #                   /        \
+            #                  <É PARA MIM>
+            #                   \        /
+            #                    \      /
+            #                     \    /
+            #                      \  /
+            #                       \/
+            # ==============================================
+            
+            while not self.verify_handshake(rxBuffer):
+                print('O Handshake não é um Handshake')
+                self.logs.write('O Handshake não é um Handshake\n')
+
+            self.offline = False # [ocioso = false]
+            time.sleep(1) # [sleep 1 sec]
+
             print('Handshake recebido')
+            self.logs.write('Handshake recebido\n')
 
             # Quantidade de pacotes de payload
-            len_packets = self.get_head_info(rxBuffer)[0]
+            self.lenPacket = self.get_head_info(rxBuffer)[0]
 
+            # [envia msg t2]
             self.send_handshake()
-            print('Enviou o handshake')
+            print('Enviou o Handshake\n')
+            self.logs.write('Enviou o Handshake\n\n')
             # ===== END HANDSHAKE
 
             # ===== DADOS
-            while self.packetId < len_packets:
+            while self.packetId < self.lenPacket and not self.offline: # se self.offline, encerra
                 rxLen = self.waitBufferLen()
                 rxBuffer, nRx = self.com1.getData(rxLen)
                 # Enquanto o pacote não estiver completo, concatena
@@ -192,46 +289,54 @@ class Server:
                     a = self.com1.getData(rxLen)[0]
                     rxBuffer += a
                     time.sleep(0.05)
+                    print('\033[93mAguardando EOP...\033[0m\n')
+                    self.logs.write('Aguardando EOP...\n\n')
 
-                _, packet_id, h5, _, last_packet = self.get_head_info(rxBuffer)
+                # Recebendo dados calcula o t1, usado para reenvio
+                self.t1 = self._calcTime(time.ctime())
+                # Recebendo dados calcula o t2, usado para timeout
+                self.t2 = self._calcTime(time.ctime())
+
+                _, packet_id, self.h5, _, last_packet = self.get_head_info(rxBuffer)
                 
                 # ===== ERROS
                 h6 = self.packetId
                 # Verificação de id de pacote, se for True, é um erro
                 if packet_id != self.packetId:
                     # ENVIAR ERRO
-                    print('\033[93m[ERRO] PACOTE INCORRETO\033[0m')
+                    print('\033[91m[ERRO] PACOTE INCORRETO\033[0m')
+                    self.logs.write('[ERRO] PACOTE INCORRETO\n')
                     print('id do cliente:', packet_id)
+                    self.logs.write(f'id do client: {packet_id}\n')
                     print('id esperado do server:', self.packetId)
+                    print()
+                    self.logs.write(f'id esperado pelo server: {self.packetId}\n\n')
                     
                     self.send_error(h6)
 
                 # Verificando se o tamanho do payload está correto
-                elif h5 != rxLen - 14:
+                elif self.h5 != rxLen - 14:
                     # ENVIAR ERRO
-                    print('\033[93m[ERRO] TAMANHO INCORRETO DO PAYLOAD\033[0m')
-                    print('h5 do cliente:', h5)
+                    print('\033[91m[ERRO] TAMANHO INCORRETO DO PAYLOAD\033[0m')
+                    self.logs.write('[ERRO] TAMANHO INCORRETO DO PAYLOAD\n')
+                    print('h5 do cliente:', self.h5)
+                    self.logs.write(f'h5 do client: {self.h5}\n')
                     print('tamanho do payload calculado:', rxLen-14)
+                    print()
+                    self.logs.write(f'tamanho do payload calculado: {rxLen-14}\n\n')
                     
                     self.send_error(h6)
                 # ===== END ERROS
 
                 else:
                     # ENVIAR ACK
-                    print('\033[92m\nEnvio correto\033[0m')
-                    self.send_ack(len_packets=len_packets, h5=h5)
+                    print('\033[92mEnvio correto\033[0m')
+                    self.logs.write('Envio correto\n')
+                    self.send_ack(len_packets=self.lenPacket, h5=self.h5)
                     self.read_payload(rxBuffer)
                     print()
                     self.packetId += 1
-            
-            # self.com1.sendData(np.asarray(self.make_packet())) #Array de bytes
-            # time.sleep(0.05)
-
-            # # A camada enlace possui uma camada inferior, TX possui um método para conhecermos o status da transmissão
-            # # O método não deve estar funcionando quando usado como abaixo. deve estar retornando zero. Tente entender como esse método funciona e faça-o funcionar.
-            # txSize = self.waitStatus()
-
-            # print('enviou = {}'.format(txSize))
+                    self.t1 = self._calcTime(time.ctime())
         
 
             # ===== MENSAGEM FINAL
@@ -241,7 +346,9 @@ class Server:
 
             # Encerra comunicação
             print("-------------------------")
+            self.logs.write('-------------------------\n')
             print("Comunicação encerrada")
+            self.logs.write('Comunicação encerrada')
  
         # except Exception as erro:
         #     print("ops! :-\\")
