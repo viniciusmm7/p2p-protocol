@@ -1,0 +1,10 @@
+h0 = tipo
+h1 = nada
+h2 = nada
+h3 = quantidade de pacotes
+h4 = id do pacote
+h5 = tamanho do payload do pacote
+h6 = pacote solicitado de reevio quando há erro
+h7 = ultimo pacote
+h8 = CRC
+h9 = CRC
