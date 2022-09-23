@@ -32,7 +32,10 @@ class Client:
         self.t3 = 0
         self.packetId = 0
         self.lastpacketId = 0
-        self.lenPackets = 0 
+        self.lenPackets = 0
+
+        # Arquivo de logs aberto e pronto para escrever
+        self.logs = open('clientLogs.txt', 'w')
 
         
     # ----- Método para a primeira porta com arduíno
@@ -254,12 +257,11 @@ class Client:
         # except Exception as erro:
         #     print("ops! :-\\")
         #     print(erro)
+        
         finally:
             print('Comunicação encerrada')
             self.com1.disable()
-
-       
-
+            self.logs.close()
             
     #so roda o main quando for executado do terminal ... se for chamado dentro de outro modulo nao roda
 if __name__ == "__main__":
