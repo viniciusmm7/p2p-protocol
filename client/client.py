@@ -1,9 +1,11 @@
 #####################################################
-# Camada Física da Computação
-#Carareto
-#11/08/2022
-#Aplicação
-####################################################
+# ----------Camada Física da Computação-------------#
+#------------------Carareto-------------------------#
+#-----------------23/09/2022------------------------#
+#------------------Cliente--------------------------#
+#####################################################
+
+
 from enlace import *
 import time, platform, serial.tools.list_ports
 import numpy as np
@@ -12,30 +14,38 @@ from img import *
 
 class Client:
     def __init__(self):
-        self.HANDSHAKE = b'\x01'
-        self.ACK = b'\x02'
-        self.EOP = b'\xAA\xBB\xCC\xDD'
-        self.ERROR = b'\x03'
-        self.FINAL = b'\x04'
-        self.IMG = "img/olhos_fitao.png"
+        self.HANDSHAKE_CLINTE = b'\x01' #----- HandShake do Cliente
+        self.HANDSHAKE_SERVER = b'\x02' #----- Confirmação do HandShake pelo Servidor
+        self.DATA = b'\x03'             #----- Head para envio de pacotes
+        self.ACK = b'\x04'              #----- Confirmação do Pacote pelo Servidor
+        self.TIME_OUT = b'\x05'         #----- Cancela a transmissão de dados caso tempo > 20
+        self.EOP = b'\xAA\xBB\xCC\xDD'  #----- Final da mensagem do pacote
+        self.ERROR = b'\x06'            #----- Mensagem de Erro no head
+        self.FINAL = b'\x07'            #----- Confirmação do Servidor que tudo foi enviado
+
+        self.TIME_OUT2 = False          #----- Para o processo do Cliente
+
+        self.IMG = "img/olhos_fitao.png"#----- Imagem a ser transmitid
 
         self.os = platform.system().lower()
-        self.serialName = self._findArduino()
+        self.serialName = self._findArduino()#-- Encontra a porta do Arduino
         self.com1 = enlace(self.serialName)
         self.com1.enable()
 
-        self.status = 0
+        self.status = 0 #------------ Status do Cliente para calculo do Time Out do HANDSHAKE!
         
-        self.t0 = 0
-        self.t1 = 0
-        self.t2 = 0
-        self.t3 = 0
-        self.packetId = 0
-        self.lastpacketId = 0
-        self.lenPackets = 0
+        self.t0 = 0 #---------------- Tempo inicial do HandShake
+        self.t1 = 0 #---------------- Tempo Final do HandShake
+        self.t2 = 0 #---------------- Tempo inicial de comunicação
+        self.t3 = 0 #---------------- Tempo Final de Comunicação
 
-        # Arquivo de logs aberto e pronto para escrever
-        self.logs = open('clientLogs.txt', 'w')
+
+        self.packetId = 0 #--------- Id do pacote enviado
+        self.lastpacketId = 0 #----- Id anterior do pacote enviado
+        self.lenPackets = 0 #------- Tamanho do Pacote
+
+        
+        self.logs = open('clientLogs.txt', 'w') #------- Arquivo de logs aberto e pronto para escrever
 
         
     # ----- Método para a primeira porta com arduíno
@@ -49,17 +59,30 @@ class Client:
             c += 1
         return result[0]
 
+    #ue
+
     # ===== MÉTODOS PARA EVITAR REPETIÇÃO DE CÓDIGO =====
     def waitBufferLen(self):
         rxLen = self.com1.rx.getBufferLen()
         while rxLen == 0:
-        
+            
             if self.status==1:
                 break
             rxLen = self.com1.rx.getBufferLen()
             self.t1 = calcula_tempo(time.ctime())
+            self.t3 = calcula_tempo(time.ctime())
+
+
+            print(variacao_tempo(self.t2, self.t3)) #---Time OUT
+
+
             if variacao_tempo(self.t0, self.t1) > 5 and self.status == 0:
+                if variacao_tempo(self.t2, self.t3)>20:
+                    print("TIME OUT")
+                    self.TIME_OUT2 = True
+                    break
                 res = input("Tentar reconexção?(s/n) ")
+                
 
                 if res.lower() == "s":
                     self.t0 = calcula_tempo(time.ctime())
@@ -67,7 +90,9 @@ class Client:
                     rxLen = self.waitBufferLen()
                 else:
                     raise Exception('Time out. Servidor não respondeu.')
-            if rxLen != 0:
+            if rxLen != 0 or variacao_tempo(self.t2, self.t3)>20:
+                print("TIME OUT")
+                self.TIME_OUT2 = True
                 break
         return rxLen
 
@@ -76,12 +101,19 @@ class Client:
         while txSize == 0:
             txSize = self.com1.tx.getStatus()
         return txSize
+
+
+
     # ====================================================
 
     # ========= MÉTODOS PARA ADMINISTRAR PACOTES =========
 
     # ----- Quebrar os dados em payloads de até 114 bytes
-    def make_payload_list(self, data):
+
+
+
+    #------- Divide o arquivo em pacotes com 114 bytes de tamanho
+    def make_payload_list(self, data):  
         limit = 114
         payload_list = []
         cont = 0 
@@ -91,7 +123,6 @@ class Client:
                 limit = len(data)
             payload_list.append(data[:limit])
             data = data[limit:]
-        #print(len(payload_list))
         return payload_list, len(payload_list)
 
     # ----- Cria o head do pacote
@@ -111,7 +142,7 @@ class Client:
 
     # ----- Envia o handshake (só para reduzir a complexidade do entendimento do main)
     def send_handshake(self,len_packets):     
-        self.com1.sendData(np.asarray(self.make_packet(type=self.HANDSHAKE, len_packets=len_packets)))
+        self.com1.sendData(np.asarray(self.make_packet(type=self.HANDSHAKE_CLINTE, len_packets=len_packets)))
         
     
     # ----- Verifica se o pacote recebido é um handshake
@@ -120,7 +151,7 @@ class Client:
         
         self.status = 1
        
-        if  rxBuffer[0].to_bytes(1,'big') == self.HANDSHAKE:
+        if  rxBuffer[0].to_bytes(1,'big') == self.HANDSHAKE_SERVER:
             return True
 
         return False
@@ -140,11 +171,16 @@ class Client:
     # ====================================================
 
     def get_type(self, rxBuffer:bytes):
+        print(rxBuffer)
+        h0 = rxBuffer[0].to_bytes(1,'big')
 
-        head = rxBuffer[:10] # 10 primeiros itens são o head
-     
-        h0 = head[0].to_bytes(1,'big')
-  
+        self.t3 = calcula_tempo(time.ctime())
+        while rxBuffer== b'':
+            print('Timing')
+            self.t4 = calcula_tempo(time.ctime())
+            if variacao_tempo(self.t3,self.t4) > 20:
+                self.TIME_OUT2 == True
+
         return h0
 
 
@@ -157,6 +193,7 @@ class Client:
             print('Abriu a comunicação')
 
             self.t0 = calcula_tempo(time.ctime())
+            self.t2 = calcula_tempo(time.ctime())
             with open(self.IMG, 'rb') as arquivo:
                 m= arquivo.read()
             
@@ -179,12 +216,14 @@ class Client:
             else:
                 print('*'*98)
                 print('\033[92mHandshake recebido\033[0m')
+                self.logs.write('Handshake recebido\n')  
 
             
 
             #print(f'quantidade de comandos {n}') 
           
             print(f'quantidade de payloads {len(payloads)}')
+            self.logs.write(f'quantidade de payloads {len(payloads)}\n')
          
       
             
@@ -228,6 +267,7 @@ class Client:
 
                 if h0 == self.ERROR:
                     print(f'\033[93mERRO: reenviando pacote {rxBuffer[6]}\033[0m')
+                    self.logs.write(f'ERRO: reenviando pacote {rxBuffer[6]}\n')
                     self.com1.sendData(np.asarray(self.make_packet(payload=payloads[rxBuffer[6]], len_packets=self.lenPackets.to_bytes(1,'big'))))
                     time.sleep(0.1)
                     self.packetId = rxBuffer[6] 
@@ -238,6 +278,7 @@ class Client:
                 #---------------Verifica o Ack enviado pelo servidor para continuar a transmissão---------------------
                 if h0 == self.ACK:
                     print('\n\033[92mACK CONFIRMADO\033[0m')
+                    self.logs.write('ACK CONFIRMADO\n')
                     self.packetId += 1
 
                     txSize = self.waitStatus()
@@ -251,7 +292,12 @@ class Client:
             
                     
                     print(f'\033[1mEnviando pacote {self.packetId}\033[0m')
+                    self.logs.write(f'Enviando pacote {self.packetId}')
                     print(f'\033[1mPayload tamanho {txSize-14}\033[0m\n')
+                    self.logs.write(f'Payload tamanho {txSize-14}')
+                
+                if self.TIME_OUT2 == True:
+                    break
 
 
         # except Exception as erro:
@@ -260,6 +306,7 @@ class Client:
         
         finally:
             print('Comunicação encerrada')
+            self.logs.write('Comunicação encerrada')
             self.com1.disable()
             self.logs.close()
             
