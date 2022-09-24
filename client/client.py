@@ -59,6 +59,8 @@ class Client:
             c += 1
         return result[0]
 
+    #ue
+
     # ===== MÉTODOS PARA EVITAR REPETIÇÃO DE CÓDIGO =====
     def waitBufferLen(self):
         rxLen = self.com1.rx.getBufferLen()
