@@ -1,0 +1,2 @@
+Iniciou o main
+Abriu a comunicação
