@@ -22,6 +22,7 @@ class Client:
         self.EOP = b'\xAA\xBB\xCC\xDD'  #----- Final da mensagem do pacote
         self.ERROR = b'\x06'            #----- Mensagem de Erro no head
         self.FINAL = b'\x07'            #----- Confirmação do Servidor que tudo foi enviado
+        self.ADDRESS = b'\xf3'          #----- Endereço a ser enviado
 
         self.TIME_OUT2 = False          #----- Para o processo do Cliente
 
