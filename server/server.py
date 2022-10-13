@@ -57,12 +57,12 @@ class Server:
     #       se tiver mais de uma (sozinho, por exemplo)
     def _findArduino(self) -> str:
         """
-        private method for finding Arduino port
+        private method to finding Arduino port
         it was not working properly, so it's hard coded
 
         ATTRIBUTES: void
 
-        RETURNS: result[0]:str list item
+        RETURNS: result[0]: str (list item)
         """
         result = []
         ports = list(serial.tools.list_ports.comports())
@@ -74,6 +74,14 @@ class Server:
 
     # ----- Método para calcular os tempos
     def _calcTime(self, ctime:str) -> list:
+        """
+        private method to convert hours, minutes and
+        seconds to a time list in seconds
+
+        ATTRIBUTES: ctime: str (current time)
+
+        RETURNS: t: list
+        """
         t = []
 
         hour = int(ctime.split()[3][:2]) * 3600
@@ -88,6 +96,14 @@ class Server:
 
     # ----- Método para calcular a variação de tempo
     def _timeVar(first:list, second:list) -> int:
+        """
+        private method to calculate the time variation
+
+        ATTRIBUTES: first: list (return of _calcTime)
+                    second: list (return of _calcTime)
+
+        RETURNS: var: int
+        """
         var = (second[0] - first[0]) + (second[1] - first[1]) + (second[2] - first[2]) 
         return var
 
@@ -99,7 +115,7 @@ class Server:
 
         ATTRIBUTES: void
 
-        RETURNS: rxLen:int
+        RETURNS: rxLen: int
         """
         rxLen = self.com1.rx.getBufferLen()
         while rxLen == 0:
@@ -122,7 +138,7 @@ class Server:
 
         ATTRIBUTES: void
 
-        RETURNS: txSize:int
+        RETURNS: txSize: int
         """
         txSize = self.com1.tx.getStatus()
         while txSize == 0:
@@ -135,8 +151,14 @@ class Server:
     # ----- Quebrar os dados em payloads de até 114 bytes
     def make_payload_list(self, data) -> list:
         """
-        method that creates a payload list with
-        items 
+        method that creates a payload list whose
+        items are multiple payloads divided into
+        up to 114 bytes
+
+        ATTRIBUTES: data (the complete data)
+
+        RETURNS: payload_list: list
+                 len(payload_list): int
         """
         limit = 114
         payload_list = []
@@ -245,22 +267,8 @@ class Server:
                 rxBuffer += a
                 time.sleep(0.05)
             
-            # ==============================================
-            #                VERIFICAÇÃO AQUI
-            #                       /\
-            #                      /  \
-            #                     /    \
-            #                    /      \
-            #                   /        \
-            #                  <É PARA MIM>
-            #                   \        /
-            #                    \      /
-            #                     \    /
-            #                      \  /
-            #                       \/
-            # ==============================================
-            
             while not self.verify_handshake(rxBuffer):
+                # dentro do verify_handshake ele já verifica o endereço
                 print('O Handshake não é um Handshake')
                 self.logs.write('O Handshake não é um Handshake\n')
 

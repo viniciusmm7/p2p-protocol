@@ -195,7 +195,7 @@ class Client:
             self.t0 = calcula_tempo(time.ctime())
             self.t2 = calcula_tempo(time.ctime())
             with open(self.IMG, 'rb') as arquivo:
-                m= arquivo.read()
+                m = arquivo.read()
             
             
             print('Enviando Handshake:')
