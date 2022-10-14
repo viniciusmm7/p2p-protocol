@@ -25,7 +25,7 @@ class Client:
         self.FINAL = b'\x07'            #----- Confirmação do Servidor que tudo foi enviado
         self.ADDRESS = b'\xf3'          #----- Endereço a ser enviado
 
-        self.TIMEOUT2 = False          #----- Para o processo do Cliente
+        self.TIMEOUT2 = False           #----- Para o processo do Cliente
 
         self.IMG = "img/olhos_fitao.png"#----- Imagem a ser transmitid
 
@@ -73,7 +73,7 @@ class Client:
             self.t3 = calcula_tempo(time.ctime())
 
 
-            print(variacao_tempo(self.t2, self.t3)) #---Time OUT
+            #print(variacao_tempo(self.t2, self.t3)) #---Time OUT
 
 
             if variacao_tempo(self.t0, self.t1) > 5 and self.status == 0:
@@ -156,7 +156,7 @@ class Client:
 
     # ----- Envia o handshake (só para reduzir a complexidade do entendimento do main)
     def send_handshake(self,len_packets):     
-        self.com1.sendData(np.asarray(self.make_packet(type=self.HANDSHAKE_CLIENT, len_packets=len_packets)))
+        self.com1.sendData(np.asarray(self.make_packet(type=self.HANDSHAKE_CLIENT, len_packets=len_packets, h5=self.ADDRESS)))
         
     
     # ----- Verifica se o pacote recebido é um handshake
@@ -218,7 +218,7 @@ class Client:
             
             self.com1.rx.clearBuffer()
             
-            self.send_handshake(self.lenPacket.to_bytes(1,'big'))
+            self.send_handshake(self.lenPacket.to_bytes(1,'big'),)
    
             rxLen = self.waitBufferLen()
             rxBuffer, nRx = self.com1.getData(rxLen)
@@ -281,7 +281,7 @@ class Client:
 
                 if h0 == self.ERROR:
                     print(f'\033[93mERRO: reenviando pacote {rxBuffer[6]}\033[0m')
-                    self.logs.write(f'ERRO: reenviando pacote {rxBuffer[6]}\n')
+                    self.logs.write(f'ERRO: reenviando pacote {rxBuffer[0],rxBuffer[6]}\n')
                     self.com1.sendData(np.asarray(self.make_packet(payload=payloads[rxBuffer[6]], len_packets=self.lenPacket.to_bytes(1,'big'))))
                     time.sleep(0.1)
                     self.packetId = rxBuffer[6] 
@@ -290,9 +290,9 @@ class Client:
                     time.sleep(0.1)
 
                 #---------------Verifica o Ack enviado pelo servidor para continuar a transmissão---------------------
-                if h0 == self.ACK:
-                    print('\n\033[92mACK CONFIRMADO\033[0m')
-                    self.logs.write('ACK CONFIRMADO\n')
+                if h0 == self.FINAL:
+                    print('\n\033[92mFINAL CONFIRMADO\033[0m')
+                    self.logs.write('FINAL CONFIRMADO\n')
                     self.packetId += 1
 
                     txSize = self.waitStatus()
