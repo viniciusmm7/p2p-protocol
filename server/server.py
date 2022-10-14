@@ -7,6 +7,7 @@
 
 
 from enlace import *
+from datetime import datetime
 import time, platform, serial.tools.list_ports
 import numpy as np
 
@@ -19,13 +20,13 @@ import numpy as np
 
 class Server:
     def __init__(self):
-        self.HANDSHAKE_CLIENT = b'\x01'
-        self.HANDSHAKE_SERVER = b'\x02'
-        self.DATA = b'\x03'
-        self.ACK = b'\x04'
-        self.TIMEOUT = b'\x05'
-        self.ERROR = b'\x06'
-        self.FINAL = b'\x07'
+        self.HANDSHAKE_CLIENT = b'\x01' # Cliente  -> Servidor
+        self.HANDSHAKE_SERVER = b'\x02' # Servidor -> Cliente
+        self.DATA = b'\x03'             # Cliente  -> Servidor
+        self.ACK = b'\x04'              # Servidor -> Cliente
+        self.TIMEOUT = b'\x05'          # Cliente  -> Servidor
+        self.ERROR = b'\x06'            # Servidor -> Cliente
+        self.FINAL = b'\x07'            # Servidor -> Cliente
         self.EOP = b'\xAA\xBB\xCC\xDD'
         self.ADDRESS = b'\xf3' # Um endereço qualquer para identificação do servidor
 
@@ -144,6 +145,23 @@ class Server:
         while txSize == 0:
             txSize = self.com1.tx.getStatus()
         return txSize
+
+    def write_log(self, rxBuffer:bytes): # ===== AINDA NÃO ESTÁ SENDO UTILIZADO =====
+        self.logs.write(f'{datetime.now().strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]} / ')
+
+        received = [self.HANDSHAKE_CLIENT, self.DATA, self.TIMEOUT]
+        sended = [self.HANDSHAKE_SERVER, self.ACK, self.ERROR, self.FINAL]
+
+        if rxBuffer[0] in received:
+            self.logs.write(f'receb / {int.from_bytes(rxBuffer[0], "big")} / {len(rxBuffer)}')
+            if rxBuffer[0] == self.DATA:
+                self.logs.write(f' / {self.packetId} / {self.lenPacket}')
+
+        elif rxBuffer[0] in sended:
+            self.logs.write(f'envio / {int.from_bytes(rxBuffer[0], "big")} / {len(rxBuffer)}')
+        
+        self.logs.write('\n')
+
     # ====================================================
 
     # ========= MÉTODOS PARA ADMINISTRAR PACOTES =========
