@@ -101,7 +101,7 @@ class Client:
             txSize = self.com1.tx.getStatus()
         return txSize
 
-    def write_log(self, rxBuffer:bytes):
+    def write_log(self, rxBuffer:bytes): # ===== AINDA NÃO ESTÁ SENDO UTILIZADO =====
         self.logs.write(f'{datetime.now().strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]} / ')
 
         sended = [self.HANDSHAKE_CLIENT, self.DATA, self.TIMEOUT]
