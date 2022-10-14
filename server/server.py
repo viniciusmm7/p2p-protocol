@@ -44,11 +44,11 @@ class Server:
         self.lenPacket = 0
         self.h5 = 0
 
-        self.t1 = 0 # Timer longo para reenvio de ack (2 segundos)
-        self.t3 = 0 # suporte de t1
+        self.t1 = None # Timer longo para reenvio de ack (2 segundos)
+        self.t3 = None # suporte de t1
 
-        self.t2 = 0 # Timer curto para timeout de ack (20 segundos)
-        self.t4 = 0 # suporte de t2
+        self.t2 = None # Timer curto para timeout de ack (20 segundos)
+        self.t4 = None # suporte de t2
 
         # Arquivo de logs aberto e pronto para escrever
         self.logs = open('serverLogs.txt', 'w')
@@ -96,7 +96,7 @@ class Server:
         return t
 
     # ----- Método para calcular a variação de tempo
-    def _timeVar(first:list, second:list) -> int:
+    def _timeVar(self, first:list, second:list) -> int:
         """
         private method to calculate the time variation
 
@@ -109,7 +109,7 @@ class Server:
         return var
 
     # ===== MÉTODOS PARA EVITAR REPETIÇÃO DE CÓDIGO =====
-    def waitBufferLen(self) -> int:
+    def waitBufferLen(self, first=False) -> int:
         """
         method used in order to reduce the
         amount of code repetition
@@ -118,17 +118,27 @@ class Server:
 
         RETURNS: rxLen: int
         """
+
+        if self.t1 is None:
+            self.t1 = self._calcTime(time.ctime())
+        if self.t2 is None:
+            self.t2 = self._calcTime(time.ctime())
+
         rxLen = self.com1.rx.getBufferLen()
         while rxLen == 0:
             rxLen = self.com1.rx.getBufferLen()
+            self.t3 = self._calcTime(time.ctime())
             self.t4 = self._calcTime(time.ctime())
-            if self._timeVar(self.t2, self.t4) > 20:
-                self.offline = True
-                self.send_timeout()
-                pass
-            if self._timeVar(self.t1, self.t3) > 2:
-                self.send_ack(len_packets=self.lenPacket, h5=self.h5)
-                self.t1 = self._calcTime(time.ctime())
+
+            if not first:
+                if self._timeVar(self.t2, self.t4) > 20:
+                    self.offline = True
+                    self.send_timeout()
+                    pass
+
+                if self._timeVar(self.t1, self.t3) > 2:
+                    self.send_ack(len_packets=self.lenPacket, h5=self.h5)
+                    self.t1 = self._calcTime(time.ctime())
             time.sleep(1)
         return rxLen
 
@@ -224,7 +234,7 @@ class Server:
     # ----- Verifica se o pacote recebido é um handshake
     # verify_handshake = lambda self, rxBuffer: True if rxBuffer[0] == self.HANDSHAKE_CLIENT else False
     def verify_handshake(self, rxBuffer:bytes) -> bool:
-        if rxBuffer[0].to_bytes(1, 'big') == self.HANDSHAKE_CLIENT and rxBuffer[5] == self.ADDRESS:
+        if rxBuffer[0].to_bytes(1, 'big') == self.HANDSHAKE_CLIENT and rxBuffer[5].to_bytes(1, 'big') == self.ADDRESS:
             return True
         return False
 
@@ -246,11 +256,13 @@ class Server:
     def send_timeout(self):
         timeout = self.make_packet(type=self.TIMEOUT)
         self.com1.sendData(np.asarray(timeout))
+        print('TIMEOUT ENVIADO')
 
     # ----- Envia o erro
     def send_error(self, h6:int=None):
         error = self.make_packet(type=self.ERROR, h6=h6.to_bytes(1, 'big'))
         self.com1.sendData(np.asarray(error))
+        print('ERRO ENVIADO')
 
     # ----- Envia mensagem final
     def send_final(self):
@@ -274,7 +286,7 @@ class Server:
 
             # ===== HANDSHAKE
             # enquanto não recebe nada, fica esperando com sleeps de 1 sec
-            rxLen = self.waitBufferLen() # <recebeu msg t1>
+            rxLen = self.waitBufferLen(first=True) # <recebeu msg t1>
             
             rxBuffer, nRx = self.com1.getData(rxLen)
 
@@ -289,6 +301,7 @@ class Server:
                 # dentro do verify_handshake ele já verifica o endereço
                 print('O Handshake não é um Handshake')
                 self.logs.write('O Handshake não é um Handshake\n')
+                time.sleep(1)
 
             self.offline = False # [ocioso = false]
             time.sleep(1) # [sleep 1 sec]
