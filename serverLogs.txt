@@ -1,14 +1,168 @@
-Iniciou o main
-Abriu a comunicação
-Handshake recebido
-Enviou o Handshake
+18/10/2022 17:13:08.277 / Iniciou o main
+18/10/2022 17:13:08.278 / Abriu a comunicação
+18/10/2022 17:13:14.320 / Recebido / 1 / 45
+18/10/2022 17:13:14.320 / Enviou o Handshake
 
-ACK: b'\x04\x00\x00-\x00\x00\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+18/10/2022 17:13:14.320 / ACK: b'\x04\x00\x00-\x00\x00\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
 
-Envio correto
-ACK: b'\x04\x00\x00-\x00r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+18/10/2022 17:13:16.338 / Envio correto
+18/10/2022 17:13:16.343 / ACK: b'\x04\x00\x00-\x00r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
 
-ACK: b'\x04\x00\x00-\x01r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+18/10/2022 17:13:16.348 / [ERRO] PACOTE INCORRETO
+18/10/2022 17:13:16.353 / id recebido: 0
+18/10/2022 17:13:16.363 / id esperado: 1
 
-ACK: b'\x04\x00\x00-\x01r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+18/10/2022 17:13:18.382 / Envio correto
+18/10/2022 17:13:18.387 / ACK: b'\x04\x00\x00-\x01r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
 
+18/10/2022 17:13:20.405 / Envio correto
+18/10/2022 17:13:20.410 / ACK: b'\x04\x00\x00-\x02r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:22.428 / Envio correto
+18/10/2022 17:13:22.433 / ACK: b'\x04\x00\x00-\x03r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:24.450 / Envio correto
+18/10/2022 17:13:24.456 / ACK: b'\x04\x00\x00-\x04r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:26.473 / Envio correto
+18/10/2022 17:13:26.478 / ACK: b'\x04\x00\x00-\x05r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:28.496 / Envio correto
+18/10/2022 17:13:28.501 / ACK: b'\x04\x00\x00-\x06r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:30.518 / Envio correto
+18/10/2022 17:13:30.523 / ACK: b'\x04\x00\x00-\x07r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:32.540 / Envio correto
+18/10/2022 17:13:32.545 / ACK: b'\x04\x00\x00-\x08r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:34.563 / Envio correto
+18/10/2022 17:13:34.568 / ACK: b'\x04\x00\x00-\tr\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:36.591 / Envio correto
+18/10/2022 17:13:36.596 / ACK: b'\x04\x00\x00-\nr\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:38.619 / Envio correto
+18/10/2022 17:13:38.624 / ACK: b'\x04\x00\x00-\x0br\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:40.635 / Envio correto
+18/10/2022 17:13:40.635 / ACK: b'\x04\x00\x00-\x0cr\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:42.652 / Envio correto
+18/10/2022 17:13:42.658 / ACK: b'\x04\x00\x00-\rr\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:44.674 / Envio correto
+18/10/2022 17:13:44.679 / ACK: b'\x04\x00\x00-\x0er\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:46.697 / Envio correto
+18/10/2022 17:13:46.702 / ACK: b'\x04\x00\x00-\x0fr\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:48.715 / Envio correto
+18/10/2022 17:13:48.720 / ACK: b'\x04\x00\x00-\x10r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:50.733 / Envio correto
+18/10/2022 17:13:50.733 / ACK: b'\x04\x00\x00-\x11r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:52.751 / Envio correto
+18/10/2022 17:13:52.756 / ACK: b'\x04\x00\x00-\x12r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:54.779 / Envio correto
+18/10/2022 17:13:54.784 / ACK: b'\x04\x00\x00-\x13r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:56.806 / Envio correto
+18/10/2022 17:13:56.811 / ACK: b'\x04\x00\x00-\x14r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:13:58.828 / Envio correto
+18/10/2022 17:13:58.829 / ACK: b'\x04\x00\x00-\x15r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:00.846 / Envio correto
+18/10/2022 17:14:00.851 / ACK: b'\x04\x00\x00-\x16r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:02.871 / [ERRO] PACOTE INCORRETO
+18/10/2022 17:14:02.876 / id recebido: 22
+18/10/2022 17:14:02.887 / id esperado: 23
+
+18/10/2022 17:14:04.903 / Envio correto
+18/10/2022 17:14:04.908 / ACK: b'\x04\x00\x00-\x17r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:06.926 / Envio correto
+18/10/2022 17:14:06.931 / ACK: b'\x04\x00\x00-\x18r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:08.949 / [ERRO] PACOTE INCORRETO
+18/10/2022 17:14:08.954 / id recebido: 24
+18/10/2022 17:14:08.969 / id esperado: 25
+
+18/10/2022 17:14:10.987 / Envio correto
+18/10/2022 17:14:10.992 / ACK: b'\x04\x00\x00-\x19r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:13.006 / Envio correto
+18/10/2022 17:14:13.011 / ACK: b'\x04\x00\x00-\x1ar\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:15.029 / [ERRO] PACOTE INCORRETO
+18/10/2022 17:14:15.034 / id recebido: 26
+18/10/2022 17:14:15.044 / id esperado: 27
+
+18/10/2022 17:14:17.062 / Envio correto
+18/10/2022 17:14:17.067 / ACK: b'\x04\x00\x00-\x1br\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:19.090 / Envio correto
+18/10/2022 17:14:19.095 / ACK: b'\x04\x00\x00-\x1cr\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:19.095 / [ERRO] PACOTE INCORRETO
+18/10/2022 17:14:19.100 / id recebido: 28
+18/10/2022 17:14:19.106 / id esperado: 29
+
+18/10/2022 17:14:21.123 / Envio correto
+18/10/2022 17:14:21.128 / ACK: b'\x04\x00\x00-\x1dr\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:23.146 / Envio correto
+18/10/2022 17:14:23.146 / ACK: b'\x04\x00\x00-\x1er\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:25.164 / Envio correto
+18/10/2022 17:14:25.169 / ACK: b'\x04\x00\x00-\x1fr\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:25.169 / [ERRO] PACOTE INCORRETO
+18/10/2022 17:14:25.169 / id recebido: 31
+18/10/2022 17:14:25.169 / id esperado: 32
+
+18/10/2022 17:14:27.187 / Envio correto
+18/10/2022 17:14:27.192 / ACK: b'\x04\x00\x00- r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:29.210 / Envio correto
+18/10/2022 17:14:29.215 / ACK: b'\x04\x00\x00-!r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:31.229 / Envio correto
+18/10/2022 17:14:31.234 / ACK: b'\x04\x00\x00-"r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:33.252 / Envio correto
+18/10/2022 17:14:33.257 / ACK: b'\x04\x00\x00-#r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:35.275 / Envio correto
+18/10/2022 17:14:35.280 / ACK: b'\x04\x00\x00-$r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:37.297 / Envio correto
+18/10/2022 17:14:37.302 / ACK: b'\x04\x00\x00-%r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:39.320 / Envio correto
+18/10/2022 17:14:39.325 / ACK: b'\x04\x00\x00-&r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:41.338 / Envio correto
+18/10/2022 17:14:41.343 / ACK: b"\x04\x00\x00-'r\x00\x00\x00\x00\xaa\xbb\xcc\xdd"
+
+18/10/2022 17:14:43.361 / Envio correto
+18/10/2022 17:14:43.366 / ACK: b'\x04\x00\x00-(r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:45.383 / Envio correto
+18/10/2022 17:14:45.389 / ACK: b'\x04\x00\x00-)r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:47.406 / Envio correto
+18/10/2022 17:14:47.412 / ACK: b'\x04\x00\x00-*r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:49.435 / Envio correto
+18/10/2022 17:14:49.440 / ACK: b'\x04\x00\x00-+r\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:51.457 / Envio correto
+18/10/2022 17:14:51.463 / ACK: b'\x04\x00\x00-,9\x00\x00\x00\x00\xaa\xbb\xcc\xdd'
+
+18/10/2022 17:14:51.473 / -------------------------
+18/10/2022 17:14:51.473 / Comunicação encerrada
