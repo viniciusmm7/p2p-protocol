@@ -79,10 +79,12 @@ class Client:
             if variacao_tempo(self.t0, self.t1) > 5 and self.status == 0:
                 if variacao_tempo(self.t2, self.t3)>20:
                     print("TIME OUT")
+                    self.logs.write(self._getNow() + '/' + " TIME OUT\n")
                     self.TIMEOUT2 = True
                     break
+                self.logs.write(self._getNow() + "/" + ' Tentar Reconexão?\n')
                 res = input("Tentar reconexção?(s/n) ")
-                
+                self.logs.write(self._getNow() + '/' + " sim\n")
 
                 if res.lower() == "s":
                     self.t0 = calcula_tempo(time.ctime())
@@ -101,6 +103,10 @@ class Client:
         while txSize == 0:
             txSize = self.com1.tx.getStatus()
         return txSize
+
+
+    def _getNow(self) -> str:
+        return datetime.now().strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]
 
     def write_log(self, bytearray:bytes): # ===== AINDA NÃO ESTÁ SENDO UTILIZADO =====
         self.logs.write(f'{datetime.now().strftime("%d/%m/%Y %H:%M:%S.%f")[:-3]} / ')
@@ -157,7 +163,7 @@ class Client:
     # ----- Envia o handshake (só para reduzir a complexidade do entendimento do main)
     def send_handshake(self,len_packets):     
         self.com1.sendData(np.asarray(self.make_packet(type=self.HANDSHAKE_CLIENT, len_packets=len_packets, h5=self.ADDRESS)))
-        
+        return self.make_packet(type=self.HANDSHAKE_CLIENT, len_packets=len_packets, h5=self.ADDRESS)
     
     # ----- Verifica se o pacote recebido é um handshake
     # verify_handshake = lambda self, rxBuffer: True if rxBuffer[0] == self.HANDSHAKE else False
@@ -169,10 +175,6 @@ class Client:
             return True
 
         return False
-
-    # ----- Envia o acknowledge (reduzir a complexidade do main)
-    def send_ack(self):
-        self.com1.sendData(np.asarray(self.make_packet(type=self.ACK)))
 
     # ----- Verifica se o pacote recebido é um acknowledge
     # verify_ack = lambda self, rxBuffer: True if rxBuffer[0] == self.ACK else False
@@ -194,7 +196,7 @@ class Client:
                 print('Timing')
                 self.t4 = calcula_tempo(time.ctime())
                 if variacao_tempo(self.t3,self.t4) > 20:
-                    self.TIMEOUT2 == True
+                    self.TIMEOUT2 = True
 
             return h0
         pass
@@ -203,11 +205,12 @@ class Client:
     def main(self):
         try:
             print('Iniciou o main')
-  
+            self.logs.write(self._getNow() + '/' + 'Iniciou o main\n')
+            
 
        
             print('Abriu a comunicação')
-
+            self.logs.write(self._getNow() + '/' + 'Abriu a comunicação\n')
             self.t0 = calcula_tempo(time.ctime())
             self.t2 = calcula_tempo(time.ctime())
             with open(self.IMG, 'rb') as arquivo:
@@ -220,19 +223,20 @@ class Client:
             
             self.com1.rx.clearBuffer()
             
-            self.send_handshake(self.lenPacket.to_bytes(1,'big'),)
-   
+            hand = self.send_handshake(self.lenPacket.to_bytes(1,'big'),)
+            self.logs.write(self._getNow() + '/' + 'Enviou Handshake' + f'{hand[0:10]}\n')
+
             rxLen = self.waitBufferLen()
             rxBuffer, nRx = self.com1.getData(rxLen)
             
 
             if not self.verify_handshake(rxBuffer):
-
+                self.logs.write(self._getNow() + '/' + 'O Handshake não é um Handshake.\n')
                 raise Exception('O Handshake não é um Handshake.')
             else:
                 print('*'*98)
                 print('\033[92mHandshake recebido\033[0m')
-                self.logs.write('Handshake recebido\n')  
+                self.logs.write(self._getNow() + '/' + ' Handshake recebido\n')  
 
             
 
@@ -248,17 +252,20 @@ class Client:
             while self.packetId < self.lenPacket:
                 susi = len(payloads[self.packetId]).to_bytes(1,'big')
                 
-           
+                pack = self.make_packet(payload=payloads[self.packetId], len_packets=self.lenPacket.to_bytes(1,'big'),h5=susi)
                 #envio de pacotes
-                self.com1.sendData(np.asarray(self.make_packet(payload=payloads[self.packetId], len_packets=self.lenPacket.to_bytes(1,'big'),h5=susi)))
-
+                self.com1.sendData(np.asarray(pack))
+                txSize = self.waitStatus()
+                self.logs.write(self._getNow()+ '/' + " Enviando pacote" + f' {pack[:10]}\n')
 
                 #=========== Erro induzido ===========
                 #self.com1.sendData(np.asarray(self.make_packet(payload=payloads[self.packetId+1], len_packets=self.lenPacket.to_bytes(1,'big'),h5=susi)))
-                time.sleep(0.1)
+                time.sleep(0.5)
                 #recebe a resposta do servidor
                 rxLen = self.waitBufferLen()
                 rxBuffer, nRx = self.com1.getData(rxLen)
+        
+                    
               
                 self.t2 = calcula_tempo(time.ctime())
                 while not rxBuffer.endswith(self.EOP):
@@ -270,10 +277,6 @@ class Client:
                     rxBuffer += a
                     time.sleep(0.05)
                     
-                    
-
-                
-
                 #--------------- Verifica resposta do server ACK ou Error ---------------
                 
               
@@ -285,19 +288,25 @@ class Client:
 
                 if h0 == self.ERROR:
                     print(f'\033[93mERRO: reenviando pacote {rxBuffer[6]}\033[0m')
-                    self.write_log(rxBuffer)
-                    self.com1.sendData(np.asarray(self.make_packet(payload=payloads[rxBuffer[6]], len_packets=self.lenPacket.to_bytes(1,'big'))))
+                    self.logs.write(self._getNow() + '/' + ' Erro' + f' Reeviando pacote {rxBuffer[6]}\n')
+                    #self.write_log(rxBuffer)
+                    #self.com1.sendData(np.asarray(self.make_packet(payload=payloads[rxBuffer[6]], len_packets=self.lenPacket.to_bytes(1,'big'))))
                     time.sleep(0.1)
-                    self.packetId = rxBuffer[6] 
+
+                    txSize = self.waitStatus()
+
+                    self.packetId = rxBuffer[6]
+
                     rxLen = self.waitBufferLen()
+
                     rxBuffer, nRx = self.com1.getData(rxLen)
-                    self.write_log(rxBuffer)
-                    time.sleep(0.1)
+        
+                    time.sleep(0.5)
 
                 #---------------Verifica o Ack enviado pelo servidor para continuar a transmissão---------------------
                 if h0 == self.ACK:
                     #print('\n\033[92mAck CONFIRMADO\033[0m')
-                    
+                    self.logs.write(self._getNow() + '/' + ' Ack Recebido' + f' {rxBuffer[:9]}\n' )
                     self.packetId += 1
 
                     txSize = self.waitStatus()
@@ -307,8 +316,6 @@ class Client:
                     # Acknowledge
                     rxLen = self.waitBufferLen()
                     rxBuffer, nRx = self.com1.getData(rxLen)
-                    if len(rxBuffer) == self.lenPacket +14:
-                        self.write_log(rxBuffer)
                     time.sleep(0.1)
             
                     
@@ -318,6 +325,7 @@ class Client:
                 
                 
                 if self.TIMEOUT2 == True:
+                    self.logs.write(self._getNow() + '/' + ' TimeOut\n')
                     break
 
 
@@ -327,7 +335,7 @@ class Client:
         
         finally:
             print('Comunicação encerrada')
-            self.logs.write('Comunicação encerrada')
+            self.logs.write(self._getNow() + ' Comunicação encerrada')
             self.com1.disable()
             self.logs.close()
             
