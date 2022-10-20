@@ -8,7 +8,7 @@
 
 from enlace import *
 from datetime import datetime
-import time, platform, serial.tools.list_ports
+import time, platform
 import numpy as np
 
 # para saber a sua porta, execute no terminal :
@@ -31,17 +31,18 @@ class Server:
         self.ADDRESS = b'\xf3' # Um endereço qualquer para identificação do servidor
 
         self.os = platform.system().lower()
-        self.serialName = '/dev/ttyACM0'#self._findArduino()
+        self.serialName = '/dev/ttyACM0'
         self.com1 = enlace(self.serialName)
         self.com1.enable()
 
         self.offline = True
+        self.timeout2 = False
 
         self.data = b''
         
         self.packetId = 0
         self.lastpacketId = 0
-        self.lenPacket = 0
+        self.numPackets = 0
         self.h5 = 0
 
         self.t1 = None # Timer longo para reenvio de ack (2 segundos)
@@ -52,26 +53,6 @@ class Server:
 
         # Arquivo de logs aberto e pronto para escrever
         self.logs = open('serverLogs.txt', 'w')
-
-
-    # ----- Método para a primeira porta com arduíno
-    #       se tiver mais de uma (sozinho, por exemplo)
-    def _findArduino(self) -> str:
-        """
-        private method to finding Arduino port
-        it was not working properly, so it's hard coded
-
-        ATTRIBUTES: void
-
-        RETURNS: result[0]: str (list item)
-        """
-        result = []
-        ports = list(serial.tools.list_ports.comports())
-        c = 1
-        for p in ports:
-            result.append(f'/dev/ttyACM{c}')
-            c += 1
-        return result[0]
 
     # ----- Método para calcular os tempos
     def _calcTime(self, ctime:str) -> list:
@@ -128,7 +109,7 @@ class Server:
             self.t2 = self._calcTime(time.ctime())
 
         rxLen = self.com1.rx.getBufferLen()
-        while rxLen == 0:
+        while not rxLen:
             rxLen = self.com1.rx.getBufferLen()
             self.t3 = self._calcTime(time.ctime())
             self.t4 = self._calcTime(time.ctime())
@@ -136,13 +117,15 @@ class Server:
             if not first:
                 if self._timeVar(self.t2, self.t4) > 20:
                     self.offline = True
+                    self.timeout2 = True
                     self.send_timeout()
-                    pass
+                    return -1
+                    # raise Exception('Timeout')
 
                 elif self._timeVar(self.t1, self.t3) > 2:
-                    self.send_ack(len_packets=self.lenPacket, h5=self.h5)
+                    self.send_ack(num_packets=self.numPackets, h5=self.h5)
                     self.t1 = self._calcTime(time.ctime())
-            time.sleep(1)
+            # time.sleep(1)
         return rxLen
 
     # ====================================================
@@ -172,8 +155,8 @@ class Server:
         return payload_list, len(payload_list)
 
     # ----- Cria o head do pacote
-    def make_head(self, type=b'\x00', h1=b'\x00', h2=b'\x00', len_packets=b'\x00', packet_id=b'\x00', h5=b'\x00', h6=b'\x00', last_packet=b'\x00', h8=b'\x00', h9=b'\x00'):
-        return type + h1 + h2 + len_packets + packet_id + h5 + h6 + last_packet + h8 + h9
+    def make_head(self, type=b'\x00', h1=b'\x00', h2=b'\x00', num_packets=b'\x00', packet_id=b'\x00', h5=b'\x00', h6=b'\x00', last_packet=b'\x00', h8=b'\x00', h9=b'\x00'):
+        return type + h1 + h2 + num_packets + packet_id + h5 + h6 + last_packet + h8 + h9
 
     # ----- Lê o payload (só para reduzir a complexidade do entendimento do main)
     def read_payload(self, rxBuffer:bytes):
@@ -186,22 +169,23 @@ class Server:
         head = rxBuffer[:10] # 10 primeiros itens são o head
 
         type_packet = head[0]
-        len_packets = head[3] # quantidade de pacotes (int)
-        packet_id   = head[4] # id do pactote (int)
+        num_packets = head[3] # quantidade de pacotes (int)
+        packet_id   = head[4] # id do pacote (int)
         h5          = head[5] # se o tipo for handshake, id do arquivo, senão, tamanho do payload (int)
         h6          = head[6] # pacote para recomeçar quando há erro (int)
         last_packet = head[7] # id do último pacote recebido com sucesso (int)
 
-        return type_packet, len_packets, packet_id, h5, h6, last_packet
+        return type_packet, num_packets, packet_id, h5, h6, last_packet
 
     # ----- Cria o pacote de fato
-    def make_packet(self, type=b'\x00', payload:bytes=b'', len_packets=b'\x00', h5=b'\x00', h6=b'\x00') -> bytes:
-        head = self.make_head(type=type, len_packets=len_packets, packet_id=self.packetId.to_bytes(1, 'big'), h5=h5, h6=h6, last_packet=self.lastpacketId.to_bytes(1, 'big'))
+    def make_packet(self, type=b'\x00', payload:bytes=b'', num_packets=b'\x00', h5=b'\x00', h6=b'\x00') -> bytes:
+        head = self.make_head(type=type, num_packets=num_packets, packet_id=self.packetId.to_bytes(1, 'big'), h5=h5, h6=h6, last_packet=self.lastpacketId.to_bytes(1, 'big'))
         return head + payload + self.EOP
 
     # ----- Envia o handshake (só para reduzir a complexidade do entendimento do main)
     def send_handshake(self):
         hs = self.make_packet(type=self.HANDSHAKE_SERVER)
+        self.logs.write(f'{self._getNow()} / Enviado  / {self.get_head_info(hs)[0]} / {self.get_head_info(hs)[3]+14}\n')
         self.com1.sendData(np.asarray(hs))
 
     # ----- Verifica se o pacote recebido é um handshake
@@ -212,39 +196,34 @@ class Server:
         return False
 
     # ----- Envia o acknowledge (reduzir a complexidade do main)
-    def send_ack(self, len_packets:int, h5:int):
-        ack = self.make_packet(type=self.ACK, len_packets=len_packets.to_bytes(1, 'big'), h5=h5.to_bytes(1, 'big'))
+    def send_ack(self, num_packets:int, h5:int):
+        ack = self.make_packet(type=self.ACK, num_packets=num_packets.to_bytes(1, 'big'), h5=h5.to_bytes(1, 'big'))
         print('ACK:', ack)
-        self.logs.write(f'{self._getNow()} / ACK: {ack}\n\n')
+        self.logs.write(f'{self._getNow()} / Enviado  / {self.get_head_info(ack)[0]} / {self.get_head_info(ack)[3]+14}\n')
         self.com1.sendData(np.asarray(ack))
-
-    # ----- Verifica se o pacote recebido é um acknowledge
-    # verify_ack = lambda self, rxBuffer: True if rxBuffer[0] == self.ACK else False
-    def verify_ack(self, rxBuffer:bytes) -> bool:
-        if rxBuffer[0].to_bytes(1, 'big') == self.ACK:
-            return True
-        return False
 
     # ----- Envia o timeout
     def send_timeout(self):
         timeout = self.make_packet(type=self.TIMEOUT)
+        self.logs.write(f'{self._getNow()} / Enviado  / {self.get_head_info(timeout)[0]} / {self.get_head_info(timeout)[3]+14}\n')
         self.com1.sendData(np.asarray(timeout))
-        print('TIMEOUT ENVIADO')
+        # print('TIMEOUT ENVIADO')
 
     # ----- Envia o erro
     def send_error(self, h6:int=None):
         error = self.make_packet(type=self.ERROR, h6=h6.to_bytes(1, 'big'))
+        self.logs.write(f'{self._getNow()} / Enviado  / {self.get_head_info(error)[0]} / {self.get_head_info(error)[3]+14}\n')
         self.com1.sendData(np.asarray(error))
-        print('ERRO ENVIADO')
+        # print('ERRO ENVIADO')
 
     # ----- Envia mensagem final
     def send_final(self):
         final = self.make_packet(type=self.FINAL)
         txSize = self.com1.tx.getStatus()
-        while txSize == 0 or txSize != 14:
+        while not txSize or txSize != 14:
             txSize = self.com1.tx.getStatus()
         final = self.make_packet(type=self.FINAL)
-        print('FINAL:', final)
+        # print('FINAL:', final)
         self.com1.sendData(np.asarray(final))
 
     # ====================================================
@@ -278,20 +257,24 @@ class Server:
             time.sleep(1) # [sleep 1 sec]
 
             print('Handshake recebido')
-            self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[1]}\n')
+            self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[3]+14}\n')
 
             # Quantidade de pacotes de payload
-            self.lenPacket = self.get_head_info(rxBuffer)[1]
+            self.numPackets = self.get_head_info(rxBuffer)[1]
 
             # [envia msg t2]
             self.send_handshake()
+            time.sleep(0.05)
             print('Enviou o Handshake\n')
-            self.logs.write(f'{self._getNow()} / Enviado / Handshake / \n\n')
             # ===== END HANDSHAKE
 
             # ===== DADOS
-            while self.packetId < self.lenPacket and not self.offline: # se self.offline, encerra
+            while self.packetId < self.numPackets and not self.offline: # se self.offline, encerra
+                
                 rxLen = self.waitBufferLen()
+                if rxLen < 0:
+                    break
+
                 rxBuffer, nRx = self.com1.getData(rxLen)
                 # Enquanto o pacote não estiver completo, concatena
                 while not rxBuffer.endswith(self.EOP):
@@ -300,71 +283,69 @@ class Server:
                     rxBuffer += a
                     time.sleep(0.05)
                     print('\033[93mAguardando EOP...\033[0m\n')
-                    self.logs.write(f'{self._getNow()} / Aguardando EOP...\n\n')
 
                 # Recebendo dados calcula o t1, usado para reenvio
                 self.t1 = self._calcTime(time.ctime())
                 # Recebendo dados calcula o t2, usado para timeout
                 self.t2 = self._calcTime(time.ctime())
 
-                _, _, packet_id, self.h5, _, last_packet = self.get_head_info(rxBuffer)
+                packet_type, _, packet_id, self.h5, _, last_packet = self.get_head_info(rxBuffer)
                 
+                match packet_type.to_bytes(1, 'big'):
+                    case self.DATA:
+                        self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[3]+14} / {self.get_head_info(rxBuffer)[2]+1} / {self.get_head_info(rxBuffer)[1]}\n')
+                    
+                    case self.TIMEOUT:
+                        self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[3]+14}\n')
+                        break
+
+                    case _:
+                        self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[3]+14}\n')
+
                 # ===== ERROS
                 h6 = self.packetId
                 # Verificação de id de pacote, se for True, é um erro
                 if packet_id != self.packetId:
                     # ENVIAR ERRO
                     print('\033[91m[ERRO] PACOTE INCORRETO\033[0m')
-                    self.logs.write(f'{self._getNow()} / [ERRO] PACOTE INCORRETO\n')
                     print('id do cliente:', packet_id)
-                    self.logs.write(f'{self._getNow()} / id recebido: {packet_id}\n')
                     print('id esperado do server:', self.packetId)
                     print()
-                    self.logs.write(f'{self._getNow()} / id esperado: {self.packetId}\n\n')
-                    
                     self.send_error(h6)
 
                 # Verificando se o tamanho do payload está correto
                 elif self.h5 != rxLen - 14:
                     # ENVIAR ERRO
                     print('\033[91m[ERRO] TAMANHO INCORRETO DO PAYLOAD\033[0m')
-                    self.logs.write(f'{self._getNow()} / [ERRO] TAMANHO INCORRETO DO PAYLOAD\n')
                     print('h5 do cliente:', self.h5)
-                    self.logs.write(f'{self._getNow()} / h5 recebido: {self.h5}\n')
                     print('tamanho do payload calculado:', rxLen-14)
                     print()
-                    self.logs.write(f'{self._getNow()} / h5 calculado: {rxLen-14}\n\n')
-                    
                     self.send_error(h6)
                 # ===== END ERROS
 
-                else:
+                elif self.h5 == rxLen - 14 and self.packetId == packet_id and packet_type.to_bytes(1, 'big') == self.DATA:
                     # ENVIAR ACK
-                    print('\033[92mEnvio correto\033[0m')
-                    self.logs.write(f'{self._getNow()} / Envio correto\n')
-                    self.send_ack(len_packets=self.lenPacket, h5=self.h5)
+                    print('\033[92mRecebimento correto\033[0m\n')
+                    self.send_ack(num_packets=self.numPackets, h5=self.h5)
                     self.read_payload(rxBuffer)
-                    print()
                     self.packetId += 1
                     self.t1 = self._calcTime(time.ctime())
-        
+                
+                self.lastpacketId = h6
 
             # ===== MENSAGEM FINAL
             self.send_final()
             # ===== END MSG FINAL
 
+        except:
+            pass
 
-            # Encerra comunicação
+        finally:
             print("-------------------------")
             self.logs.write(f'{self._getNow()} / -------------------------\n')
             print("Comunicação encerrada")
             self.logs.write(f'{self._getNow()} / Comunicação encerrada')
- 
-        # except Exception as erro:
-        #     print("ops! :-\\")
-        #     print(erro)
 
-        finally:
             self.com1.disable()
 
             copia = 'olhos_fitaocopia.png'
