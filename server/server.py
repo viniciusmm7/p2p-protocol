@@ -10,6 +10,7 @@ from enlace import *
 from datetime import datetime
 import time, platform
 import numpy as np
+from binascii import crc32
 
 # para saber a sua porta, execute no terminal :
 # python3 -m serial.tools.list_ports
@@ -39,6 +40,8 @@ class Server:
         self.timeout2 = False
 
         self.data = b''
+        self.crc1 = b'\x00'
+        self.crc2 = b'\x00'
         
         self.packetId = 0
         self.lastpacketId = 0
@@ -155,8 +158,11 @@ class Server:
         return payload_list, len(payload_list)
 
     # ----- Cria o head do pacote
-    def make_head(self, type=b'\x00', h1=b'\x00', h2=b'\x00', num_packets=b'\x00', packet_id=b'\x00', h5=b'\x00', h6=b'\x00', last_packet=b'\x00', h8=b'\x00', h9=b'\x00'):
-        return type + h1 + h2 + num_packets + packet_id + h5 + h6 + last_packet + h8 + h9
+    def make_head(self, type=b'\x00', h1=b'\x00', h2=b'\x00', num_packets=b'\x00', packet_id=b'\x00', h5=b'\x00', h6=b'\x00', last_packet=b'\x00'):
+        match type:
+            case self.DATA:
+                return type + h1 + h2 + num_packets + packet_id + h5 + h6 + last_packet + self.crc1 + self.crc2
+        return type + h1 + h2 + num_packets + packet_id + h5 + h6 + last_packet + b'\x00' + b'\x00'
 
     # ----- Lê o payload (só para reduzir a complexidade do entendimento do main)
     def read_payload(self, rxBuffer:bytes):
@@ -174,11 +180,14 @@ class Server:
         h5          = head[5] # se o tipo for handshake, id do arquivo, senão, tamanho do payload (int)
         h6          = head[6] # pacote para recomeçar quando há erro (int)
         last_packet = head[7] # id do último pacote recebido com sucesso (int)
+        crc1, crc2  = head[8], head[9] # dois bytes de crc32
 
-        return type_packet, num_packets, packet_id, h5, h6, last_packet
+        return type_packet, num_packets, packet_id, h5, h6, last_packet, crc1, crc2
 
     # ----- Cria o pacote de fato
     def make_packet(self, type=b'\x00', payload:bytes=b'', num_packets=b'\x00', h5=b'\x00', h6=b'\x00') -> bytes:
+        if payload:
+            self.check_sum(payload)
         head = self.make_head(type=type, num_packets=num_packets, packet_id=self.packetId.to_bytes(1, 'big'), h5=h5, h6=h6, last_packet=self.lastpacketId.to_bytes(1, 'big'))
         return head + payload + self.EOP
 
@@ -189,11 +198,16 @@ class Server:
         self.com1.sendData(np.asarray(hs))
 
     # ----- Verifica se o pacote recebido é um handshake
-    # verify_handshake = lambda self, rxBuffer: True if rxBuffer[0] == self.HANDSHAKE_CLIENT else False
     def verify_handshake(self, rxBuffer:bytes) -> bool:
         if rxBuffer[0].to_bytes(1, 'big') == self.HANDSHAKE_CLIENT and rxBuffer[5].to_bytes(1, 'big') == self.ADDRESS:
             return True
         return False
+
+    # ----- Cria o CRC do pacote
+    def check_sum(self, payload:bytes):
+        crc_server = crc32(payload).to_bytes(8, 'big')
+        self.crc1 = crc_server[-2].to_bytes(1, 'big')
+        self.crc2 = crc_server[-1].to_bytes(1, 'big')
 
     # ----- Envia o acknowledge (reduzir a complexidade do main)
     def send_ack(self, num_packets:int, h5:int):
@@ -284,23 +298,25 @@ class Server:
                     time.sleep(0.05)
                     print('\033[93mAguardando EOP...\033[0m\n')
 
+                self.check_sum(self.read_payload(rxBuffer))
+
                 # Recebendo dados calcula o t1, usado para reenvio
                 self.t1 = self._calcTime(time.ctime())
                 # Recebendo dados calcula o t2, usado para timeout
                 self.t2 = self._calcTime(time.ctime())
 
-                packet_type, _, packet_id, self.h5, _, last_packet = self.get_head_info(rxBuffer)
+                packet_type, num_packets, packet_id, self.h5, _, last_packet, crc1, crc2 = self.get_head_info(rxBuffer)
                 
                 match packet_type.to_bytes(1, 'big'):
                     case self.DATA:
-                        self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[3]+14} / {self.get_head_info(rxBuffer)[2]+1} / {self.get_head_info(rxBuffer)[1]}\n')
+                        self.logs.write(f'{self._getNow()} / Recebido / {packet_type} / {self.h5+14} / {packet_id+1} / {num_packets} / {crc1.to_bytes(1, "big").hex().split("b")[-1]}{crc2.to_bytes(1, "big").hex().split("b")[-1]}\n')
                     
                     case self.TIMEOUT:
-                        self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[3]+14}\n')
+                        self.logs.write(f'{self._getNow()} / Recebido / {packet_type} / {self.h5+14}\n')
                         break
 
                     case _:
-                        self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[3]+14}\n')
+                        self.logs.write(f'{self._getNow()} / Recebido / {packet_type} / {self.h5+14}\n')
 
                 # ===== ERROS
                 h6 = self.packetId
@@ -321,6 +337,12 @@ class Server:
                     print('tamanho do payload calculado:', rxLen-14)
                     print()
                     self.send_error(h6)
+
+                elif self.crc1 != crc1.to_bytes(1, 'big') or self.crc2 != crc2.to_bytes(1, 'big'):
+                    # ENVIAR ERRO
+                    print('\033[91m[ERRO] CHECKSUM INCORRETO\033[0m')
+                    print()
+                    self.send_error(h6)
                 # ===== END ERROS
 
                 elif self.h5 == rxLen - 14 and self.packetId == packet_id and packet_type.to_bytes(1, 'big') == self.DATA:
@@ -337,8 +359,8 @@ class Server:
             self.send_final()
             # ===== END MSG FINAL
 
-        except:
-            pass
+        # except:
+        #     pass
 
         finally:
             print("-------------------------")

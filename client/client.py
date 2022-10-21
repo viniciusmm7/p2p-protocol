@@ -11,6 +11,7 @@ from datetime import datetime
 import time, platform, serial.tools.list_ports
 import numpy as np
 from comandos import *
+from binascii import crc32
 from img import *
 
 class Client:
@@ -20,9 +21,9 @@ class Client:
         self.DATA = b'\x03'             #----- Head para envio de pacotes
         self.ACK = b'\x04'              #----- Confirmação do Pacote pelo Servidor
         self.TIMEOUT = b'\x05'          #----- Cancela a transmissão de dados caso tempo > 20
-        self.EOP = b'\xAA\xBB\xCC\xDD'  #----- Final da mensagem do pacote
         self.ERROR = b'\x06'            #----- Mensagem de Erro no head
         self.FINAL = b'\x07'            #----- Confirmação do Servidor que tudo foi enviado
+        self.EOP = b'\xAA\xBB\xCC\xDD'  #----- Final da mensagem do pacote
         self.ADDRESS = b'\xf3'          #----- Endereço a ser enviado
 
         self.timeout2 = False           #----- Para o processo do Cliente
@@ -41,6 +42,8 @@ class Client:
         self.t2 = 0 #---------------- Tempo inicial de comunicação
         self.t3 = 0 #---------------- Tempo Final de Comunicação
 
+        self.crc1 = b'\x00'
+        self.crc2 = b'\x00'
 
         self.packetId = 0 #--------- Id do pacote enviado
         self.lastpacketId = 0 #----- Id anterior do pacote enviado
@@ -84,7 +87,7 @@ class Client:
 
                 if res.lower() == "s":
                     self.t0 = calcula_tempo(time.ctime())
-                    self.send_handshake(len_packets=self.lenPacket.to_bytes(1,'big'))
+                    self.send_handshake(num_packets=self.lenPacket.to_bytes(1,'big'))
                     rxLen = self.waitBufferLen()
         return rxLen
 
@@ -117,8 +120,11 @@ class Client:
         return payload_list, len(payload_list)
 
     # ----- Cria o head do pacote
-    def make_head(self, type=b'\x00', h1=b'\x00', h2=b'\x00', len_packets=b'\x00', packet_id=b'\x00', h5=b'\x00', h6=b'\x00', last_packet=b'\x00', h8=b'\x00', h9=b'\x00'):
-        return (type + h1 + h2 +len_packets + packet_id + h5 + h6 + last_packet + h8 + h9)
+    def make_head(self, type=b'\x00', h1=b'\x00', h2=b'\x00', num_packets=b'\x00', packet_id=b'\x00', h5=b'\x00', h6=b'\x00', last_packet=b'\x00'):
+        match type:
+            case self.DATA:
+                return type + h1 + h2 + num_packets + packet_id + h5 + h6 + last_packet + self.crc1 + self.crc2
+        return type + h1 + h2 + num_packets + packet_id + h5 + h6 + last_packet + b'\x00' + b'\x00'
 
     def get_head_info(self, rxBuffer:bytes):
         head = rxBuffer[:10] # 10 primeiros itens são o head
@@ -133,15 +139,20 @@ class Client:
         return type_packet, num_packets, packet_id, h5, h6, last_packet
 
     # ----- Cria o pacote de fato
-    def make_packet(self, type=b'\x00', payload:bytes=b'', len_packets=b'\x00', h5:bytes=b'\x00') -> bytes:
-        head = self.make_head(type=type, len_packets=len_packets, packet_id=self.packetId.to_bytes(1,'big'), h5=h5, last_packet=self.lastpacketId.to_bytes(1,'big'))
+    def make_packet(self, type=b'\x00', payload:bytes=b'', num_packets=b'\x00', h5:bytes=b'\x00') -> bytes:
+        if payload:
+            crc = crc32(payload).to_bytes(8, 'big')
+            crc1 = crc[-2].to_bytes(1, 'big')
+            crc2 = crc[-1].to_bytes(1, 'big')
+        head = self.make_head(type=type, num_packets=num_packets, packet_id=self.packetId.to_bytes(1,'big'), h5=h5, last_packet=self.lastpacketId.to_bytes(1,'big'))
         return (head + payload + self.EOP)
 
     # ----- Envia o pacote de dados
     def send_data(self, payloads:list):
         h5 = len(payloads[self.packetId]).to_bytes(1, 'big')
-        data = self.make_packet(type=self.DATA, payload=payloads[self.packetId], len_packets=self.lenPacket.to_bytes(1,'big'),h5=h5)
-        self.logs.write(f'{self._getNow()} / Enviado  / {self.get_head_info(data)[0]} / {self.get_head_info(data)[3]+14} / {self.get_head_info(data)[2]+1} / {self.get_head_info(data)[1]}\n')
+        self.check_sum(payloads[self.packetId])
+        data = self.make_packet(type=self.DATA, payload=payloads[self.packetId], num_packets=self.lenPacket.to_bytes(1,'big'),h5=h5)
+        self.logs.write(f'{self._getNow()} / Enviado  / {self.get_head_info(data)[0]} / {self.get_head_info(data)[3]+14} / {self.get_head_info(data)[2]+1} / {self.get_head_info(data)[1]} / {self.crc1.hex().split("b")[-1]}{self.crc2.hex().split("b")[-1]}\n')
         self.com1.sendData(np.asarray(data))
 
     # ----- Envia o timeout
@@ -151,8 +162,8 @@ class Client:
         self.com1.sendData(np.asarray(timeout))
 
     # ----- Envia o handshake (só para reduzir a complexidade do entendimento do main)
-    def send_handshake(self,len_packets):
-        hs = self.make_packet(type=self.HANDSHAKE_CLIENT, len_packets=len_packets, h5=self.ADDRESS)
+    def send_handshake(self,num_packets):
+        hs = self.make_packet(type=self.HANDSHAKE_CLIENT, num_packets=num_packets, h5=self.ADDRESS)
         self.logs.write(f'{self._getNow()} / Enviado  / {self.get_head_info(hs)[0]} / {self.get_head_info(hs)[3]+14}\n')
         self.com1.sendData(np.asarray(hs))
     
@@ -162,6 +173,12 @@ class Client:
         if  rxBuffer[0].to_bytes(1,'big') == self.HANDSHAKE_SERVER:
             return True
         return False
+
+    # ----- Cria o CRC do pacote
+    def check_sum(self, payload:bytes):
+        crc_client = crc32(payload).to_bytes(8, 'big')
+        self.crc1 = crc_client[-2].to_bytes(1, 'big')
+        self.crc2 = crc_client[-1].to_bytes(1, 'big')
     # ====================================================
 
     def get_type(self, rxBuffer:bytes):
@@ -204,10 +221,7 @@ class Client:
             rxBuffer, nRx = self.com1.getData(rxLen)
             
 
-            while not self.verify_handshake(rxBuffer):
-                print(end='')
-                print('O Handshake não é um Handshake.')
-            else:
+            if self.verify_handshake(rxBuffer):
                 print('*'*98)
                 print('\033[92mHandshake recebido\033[0m')
                 self.logs.write(f'{self._getNow()} / Recebido / {self.get_head_info(rxBuffer)[0]} / {self.get_head_info(rxBuffer)[3]+14}\n')
@@ -218,7 +232,7 @@ class Client:
                 txSize = self.waitStatus()
 
                 #=========== Erro induzido ===========
-                # self.com1.sendData(np.asarray(self.make_packet(payload=payloads[self.packetId+1], len_packets=self.lenPacket.to_bytes(1,'big'),h5=h5)))
+                # self.com1.sendData(np.asarray(self.make_packet(payload=payloads[self.packetId+1], num_packets=self.lenPacket.to_bytes(1,'big'),h5=h5)))
                 time.sleep(0.05)
                 #recebe a resposta do servidor
                 rxLen = self.waitBufferLen()
@@ -270,8 +284,8 @@ class Client:
                     self.send_timeout()
                     break
         
-        except:
-            pass
+        # except:
+        #     pass
 
         finally:
             self.com1.disable()
